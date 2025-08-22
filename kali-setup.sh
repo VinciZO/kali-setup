@@ -17,13 +17,15 @@ APT_PACKAGES=(
   curl
   jq
   git
-  open-vm-tools-desktop
   dbus-x11
   kali-community-wallpapers
   open-vm-tools
   open-vm-tools-desktop
   burpsuite
   seclists
+  gobuster
+  feroxbuster
+  mingw-w64
 )
 
 TIMEZONE="Europe/Berlin"
@@ -112,86 +114,182 @@ else
   echo "    !! Neither rockyou.txt nor rockyou.txt.gz found in $ROCKYOU_DIR"
 fi
 
-# ===== Tools: create ~/www and pull helpers ==================================
-echo "[*] Preparing ~/www with common tools..."
-# ===== Tools: ~/www + local-copy-or-download =================================
+# ===== Tools: ~/www (local-copy-or-download, resilient) ======================
 echo "[*] Preparing ~/www with common tools (prefer local copies)..."
 WWW_DIR="$HOME/www"
 mkdir -p "$WWW_DIR"
 
 need() { command -v "$1" >/dev/null 2>&1 || { echo "    -> installing $1..."; sudo apt install -y "$1"; }; }
+need curl
 UA="Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0"
-curlget() { curl -fL --retry 3 --retry-delay 2 -A "$UA" "$@"; }
 
-# Helper: try to copy first match from /usr/share, else curl it
-copy_or_get() {
-  local pattern="$1" dest="$2" url="$3"
+# Curl with retries + UA
+_fetch() { curl -fL --retry 3 --retry-delay 2 -A "$UA" "$@"; }
+
+# Try local copy first, else try a list of URLs until one works
+copy_or_try_urls() {
+  local pattern="$1" dest="$2"; shift 2
   local found
   found="$(sudo find /usr/share -maxdepth 8 -type f -iname "$pattern" 2>/dev/null | head -n1 || true)"
   if [[ -n "$found" ]]; then
     echo "  - Found local: $found -> $dest"
     sudo cp -f "$found" "$dest"
-  else
-    echo "  - Downloading -> $dest"
-    curlget -o "$dest" "$url"
+    return 0
   fi
+  for url in "$@"; do
+    echo "  - Downloading $dest"
+    if _fetch -o "$dest" "$url"; then return 0; fi
+    echo "    ! Failed: $url (will try next)"
+  done
+  echo "    !! All sources failed for $dest"
+  return 1
 }
 
-# --- Sysinternals Suite (Windows binaries, ZIP) ---
+# ---------- Sysinternals Suite ----------
 if [[ ! -d "$WWW_DIR/sysinternals" ]]; then
-  echo "  - Downloading Sysinternals Suite..."
+  echo "  - Sysinternals Suite"
   need unzip
   TMPZ="/tmp/sysinternals.zip"
-  curlget -o "$TMPZ" "https://download.sysinternals.com/files/SysinternalsSuite.zip"
-  mkdir -p "$WWW_DIR/sysinternals"
-  unzip -oq "$TMPZ" -d "$WWW_DIR/sysinternals"
-  rm -f "$TMPZ"
+  if _fetch -o "$TMPZ" "https://download.sysinternals.com/files/SysinternalsSuite.zip"; then
+    mkdir -p "$WWW_DIR/sysinternals"
+    unzip -oq "$TMPZ" -d "$WWW_DIR/sysinternals"
+    rm -f "$TMPZ"
+  else
+    echo "    !! Sysinternals download failed"
+  fi
 else
   echo "  ✓ Sysinternals already present"
 fi
 
-# --- linpeas.sh ---
-copy_or_get "linpeas.sh" "$WWW_DIR/linpeas.sh" \
+# ---------- linpeas.sh ----------
+copy_or_try_urls "linpeas.sh" "$WWW_DIR/linpeas.sh" \
   "https://github.com/carlospolop/PEASS-ng/releases/latest/download/linpeas.sh"
-chmod +x "$WWW_DIR/linpeas.sh" || true
+chmod +x "$WWW_DIR/linpeas.sh" 2>/dev/null || true
 
-# --- LinEnum.sh ---
-copy_or_get "LinEnum.sh" "$WWW_DIR/LinEnum.sh" \
-  "https://raw.githubusercontent.com/rebootuser/LinEnum/master/LinEnum.sh"
-chmod +x "$WWW_DIR/LinEnum.sh" || true
+# ---------- LinEnum.sh ----------
+copy_or_try_urls "LinEnum.sh" "$WWW_DIR/LinEnum.sh" \
+  "https://raw.githubusercontent.com/rebootuser/LinEnum/master/LinEnum.sh" \
+  "https://raw.githubusercontent.com/rebootuser/LinEnum/main/LinEnum.sh"
+chmod +x "$WWW_DIR/LinEnum.sh" 2>/dev/null || true
 
-# --- mimikatz.exe ---
-copy_or_get "mimikatz.exe" "$WWW_DIR/mimikatz.exe" \
+# ---------- unix-privesc-check ----------
+copy_or_try_urls "unix-privesc-check" "$WWW_DIR/unix-privesc-check" \
+  "https://raw.githubusercontent.com/pentestmonkey/unix-privesc-check/master/unix-privesc-check" \
+  "https://raw.githubusercontent.com/pentestmonkey/unix-privesc-check/main/unix-privesc-check"
+chmod +x "$WWW_DIR/unix-privesc-check" 2>/dev/null || true
+
+# ---------- mimikatz.exe (zip upstream) ----------
+copy_or_try_urls "mimikatz.exe" "$WWW_DIR/mimikatz.exe" \
   "https://github.com/gentilkiwi/mimikatz/releases/latest/download/mimikatz_trunk.zip"
+# If we accidentally saved a zip (URL above), extract mimikatz.exe
 if file "$WWW_DIR/mimikatz.exe" 2>/dev/null | grep -qi zip; then
   need unzip
   TMPZ="$WWW_DIR/mimikatz_trunk.zip"
   mv -f "$WWW_DIR/mimikatz.exe" "$TMPZ"
-  unzip -oq "$TMPZ" -d "$WWW_DIR/mimikatz_extracted"
-  CAND="$(find "$WWW_DIR/mimikatz_extracted" -iname mimikatz.exe | sort | head -n1 || true)"
-  if [[ -n "$CAND" ]]; then mv -f "$CAND" "$WWW_DIR/mimikatz.exe"; fi
-  rm -rf "$WWW_DIR/mimikatz_extracted" "$TMPZ"
+  unzip -oq "$TMPZ" -d "$WWW_DIR/_mimi"
+  CAND="$(find "$WWW_DIR/_mimi" -iname mimikatz.exe | head -n1 || true)"
+  [[ -n "$CAND" ]] && mv -f "$CAND" "$WWW_DIR/mimikatz.exe"
+  rm -rf "$WWW_DIR/_mimi" "$TMPZ"
 fi
 
-# --- SharpHound.ps1 ---
-copy_or_get "SharpHound.ps1" "$WWW_DIR/SharpHound.ps1" \
-  "https://raw.githubusercontent.com/BloodHoundAD/BloodHound/master/Collectors/SharpHound.ps1"
+# ---------- SharpHound.ps1 ----------
+copy_or_try_urls "SharpHound.ps1" "$WWW_DIR/SharpHound.ps1" \
+  "https://raw.githubusercontent.com/BloodHoundAD/BloodHound/master/Collectors/SharpHound.ps1" \
+  "https://raw.githubusercontent.com/BloodHoundAD/BloodHound/main/Collectors/SharpHound.ps1"
 
-# --- WinPEASx64.exe ---
-copy_or_get "winpeasx64.exe" "$WWW_DIR/WinPEASx64.exe" \
+# ---------- WinPEASx64.exe ----------
+copy_or_try_urls "winpeasx64.exe" "$WWW_DIR/WinPEASx64.exe" \
   "https://github.com/carlospolop/PEASS-ng/releases/latest/download/winPEASx64.exe"
 
-# --- PowerUp.ps1 ---
-copy_or_get "PowerUp.ps1" "$WWW_DIR/PowerUp.ps1" \
-  "https://raw.githubusercontent.com/PowerShellMafia/PowerSploit/master/Privesc/PowerUp.ps1"
+# ---------- PowerUp.ps1 ----------
+copy_or_try_urls "PowerUp.ps1" "$WWW_DIR/PowerUp.ps1" \
+  "https://raw.githubusercontent.com/PowerShellMafia/PowerSploit/master/Privesc/PowerUp.ps1" \
+  "https://raw.githubusercontent.com/PowerShellMafia/PowerSploit/main/Privesc/PowerUp.ps1"
 
-# --- PowerView.ps1 ---
-copy_or_get "PowerView.ps1" "$WWW_DIR/PowerView.ps1" \
-  "https://raw.githubusercontent.com/PowerShellMafia/PowerSploit/master/Recon/PowerView.ps1"
+# ---------- PowerView.ps1 ----------
+copy_or_try_urls "PowerView.ps1" "$WWW_DIR/PowerView.ps1" \
+  "https://raw.githubusercontent.com/PowerShellMafia/PowerSploit/master/Recon/PowerView.ps1" \
+  "https://raw.githubusercontent.com/PowerShellMafia/PowerSploit/main/Recon/PowerView.ps1"
 
-# Final touches
-chmod +x "$WWW_DIR/"*.sh 2>/dev/null || true
-echo "✅ Tools staged in $WWW_DIR"
+# ---------- Kerbrute (linux + windows) ----------
+if [[ ! -f "$WWW_DIR/kerbrute_linux_amd64" ]]; then
+  copy_or_try_urls "kerbrute*linux*amd64*" "$WWW_DIR/kerbrute_linux_amd64" \
+    "https://github.com/ropnop/kerbrute/releases/latest/download/kerbrute_linux_amd64"
+  chmod +x "$WWW_DIR/kerbrute_linux_amd64" 2>/dev/null || true
+fi
+if [[ ! -f "$WWW_DIR/kerbrute_windows_amd64.exe" ]]; then
+  copy_or_try_urls "kerbrute*windows*amd64*.exe" "$WWW_DIR/kerbrute_windows_amd64.exe" \
+    "https://github.com/ropnop/kerbrute/releases/latest/download/kerbrute_windows_amd64.exe"
+fi
+
+# ---------- Chisel (linux + windows) ----------
+need gzip
+if [[ ! -f "$WWW_DIR/chisel_linux_amd64" ]]; then
+  if _fetch -o "$WWW_DIR/chisel_linux_amd64.gz" "https://github.com/jpillora/chisel/releases/latest/download/chisel_linux_amd64.gz"; then
+    gunzip -f "$WWW_DIR/chisel_linux_amd64.gz"
+    chmod +x "$WWW_DIR/chisel_linux_amd64" 2>/dev/null || true
+  else
+    echo "    !! Failed chisel_linux_amd64.gz"
+  fi
+fi
+if [[ ! -f "$WWW_DIR/chisel_windows_amd64.exe" ]]; then
+  if _fetch -o "$WWW_DIR/chisel_windows_amd64.gz" "https://github.com/jpillora/chisel/releases/latest/download/chisel_windows_amd64.gz"; then
+    gunzip -f "$WWW_DIR/chisel_windows_amd64.gz"
+    # gunzip on the windows gz yields chisel.exe
+    [[ -f "$WWW_DIR/chisel.exe" ]] && mv -f "$WWW_DIR/chisel.exe" "$WWW_DIR/chisel_windows_amd64.exe"
+  else
+    echo "    !! Failed chisel_windows_amd64.gz"
+  fi
+fi
+
+# ---------- Vshadow ----------
+echo "  - Vshadow: not auto-downloaded (Windows SDK/EULA). If you have it, copy vshadow*.exe into $WWW_DIR."
+
+# ---------- Rubeus (use ZIP; some releases don’t expose .exe directly) ----------
+if copy_or_try_urls "Rubeus.exe" "$WWW_DIR/Rubeus.exe" \
+  "https://github.com/GhostPack/Rubeus/releases/latest/download/Rubeus.exe"; then
+  : # ok
+else
+  need unzip
+  TMPZ="/tmp/Rubeus.zip"
+  if _fetch -o "$TMPZ" "https://github.com/GhostPack/Rubeus/releases/latest/download/Rubeus.zip"; then
+    unzip -oq "$TMPZ" -d "$WWW_DIR/_rubeus"
+    CAND="$(find "$WWW_DIR/_rubeus" -iname Rubeus.exe | head -n1 || true)"
+    [[ -n "$CAND" ]] && mv -f "$CAND" "$WWW_DIR/Rubeus.exe"
+    rm -rf "$WWW_DIR/_rubeus" "$TMPZ"
+  else
+    echo "    !! Failed to get Rubeus"
+  fi
+fi
+
+# ---------- dnSpy (dnSpyEx portable net472) ----------
+if [[ ! -d "$WWW_DIR/dnspy" ]]; then
+  found_dnspy="$(sudo find /usr/share -maxdepth 8 -type d -iname "dnspy*" 2>/dev/null | head -n1 || true)"
+  if [[ -n "$found_dnspy" ]]; then
+    cp -r "$found_dnspy" "$WWW_DIR/dnspy"
+  else
+    need unzip
+    TMPZ="/tmp/dnSpy-net472.zip"
+    if _fetch -o "$TMPZ" "https://github.com/dnSpyEx/dnSpy/releases/latest/download/dnSpy-net472.zip"; then
+      mkdir -p "$WWW_DIR/dnspy"
+      unzip -oq "$TMPZ" -d "$WWW_DIR/dnspy"
+      rm -f "$TMPZ"
+    else
+      echo "    !! Failed dnSpy download"
+    fi
+  fi
+fi
+
+# ---------- Inveigh ----------
+copy_or_try_urls "Inveigh.ps1" "$WWW_DIR/Inveigh.ps1" \
+  "https://raw.githubusercontent.com/Kevin-Robertson/Inveigh/master/Inveigh.ps1" \
+  "https://raw.githubusercontent.com/Kevin-Robertson/Inveigh/main/Inveigh.ps1"
+
+# ---------- Summary ----------
+echo
+echo "== ~/www contents =="
+ls -lah "$WWW_DIR" | sed 's/^/  /'
+echo "===================="
 
 # ===== DONE ================================================================
 echo
