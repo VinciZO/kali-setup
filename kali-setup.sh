@@ -99,17 +99,56 @@ JSON"
 done
 
 # =====================================================
-#  TERMINAL FONT SIZE = 16 (Xfce + GNOME)
+#  TERMINAL FONT SIZE = 16 (QTerminal + Xfce + GNOME)
 # =====================================================
 echo "[*] Setting terminal font size to 16..."
 
-# Xfce Terminal (most Kali spins)
-if command -v xfconf-query >/dev/null 2>&1; then
-  xfconf-query -c xfce4-terminal -p /general/FontUseSystem -s false || true
-  xfconf-query -c xfce4-terminal -p /general/FontName -s "Monospace 16" || true
+# --- QTerminal (LXQt) ---
+if ps -o comm= -p $PPID | grep -qi 'qterminal'; then
+  QINI="$HOME/.config/qterminal.org/qterminal.ini"
+  mkdir -p "$(dirname "$QINI")"
+
+  if [[ ! -f "$QINI" ]]; then
+    # Create a minimal config with our font settings
+    cat > "$QINI" <<'EOF'
+[General]
+fontFamily=Monospace
+fontSize=16
+EOF
+  else
+    # Update (or add) fontFamily/fontSize inside [General] section in-place
+    awk -v fam="Monospace" -v size="16" '
+      BEGIN{in_gen=0; found_gen=0; setfam=0; setsize=0}
+      /^\[General\]/{print; in_gen=1; found_gen=1; next}
+      /^\[/{ if(in_gen && !setfam){print "fontFamily=" fam}
+             if(in_gen && !setsize){print "fontSize=" size}
+             in_gen=0; print; next }
+      {
+        if(in_gen && $0 ~ /^fontFamily=/){print "fontFamily=" fam; setfam=1; next}
+        if(in_gen && $0 ~ /^fontSize=/){print "fontSize=" size; setsize=1; next}
+        print
+      }
+      END{
+        if(!found_gen){
+          print "[General]"
+          print "fontFamily=" fam
+          print "fontSize=" size
+        } else if(in_gen){
+          if(!setfam) print "fontFamily=" fam
+          if(!setsize) print "fontSize=" size
+        }
+      }' "$QINI" > "$QINI.tmp" && mv "$QINI.tmp" "$QINI"
+  fi
+  echo "    -> QTerminal font set to Monospace 16 (restart QTerminal to apply)."
 fi
 
-# GNOME Terminal (Kali GNOME flavor)
+# --- Xfce Terminal (if present) ---
+if command -v xfconf-query >/dev/null 2>&1; then
+  xfconf-query -c xfce4-terminal -p /general/use-system-font -s false || true
+  xfconf-query -c xfce4-terminal -p /general/fontName -s "Monospace 16" || true
+fi
+
+# --- GNOME Terminal (if present) ---
 if command -v gsettings >/dev/null 2>&1 && gsettings list-schemas | grep -q 'org.gnome.Terminal.ProfilesList'; then
   PROFILE_ID=$(gsettings get org.gnome.Terminal.ProfilesList default | tr -d \')
   BASE="org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:$PROFILE_ID/"
