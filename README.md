@@ -1,7 +1,8 @@
 # kali-setup
 All the basic tools and settings you need for your kali VMs.
 
-##Download and run:
+## Download and run:
 ```
+chmod +x ./kali-setup.sh
 ./kali-setup.sh
 ```
