@@ -104,34 +104,26 @@ done
 echo "[*] Setting terminal font size to 16..."
 
 # --- QTerminal (if present) ---
-# Pick the correct config file: prefer .conf, fall back to .ini
-QCONF="$HOME/.config/qterminal.org/qterminal.conf"
-[[ -f "$QCONF" ]] || QCONF="$HOME/.config/qterminal.org/qterminal.ini"
-
+QCONF="$HOME/.config/qterminal.org/qterminal.ini"
 pkill -x qterminal 2>/dev/null || true      # close QTerminal so it can't overwrite changes
 mkdir -p "$(dirname "$QCONF")"
 [[ -f "$QCONF" ]] || printf "[General]\n" > "$QCONF"
 
-# Ensure we have a [General] section (some files exist without it)
-grep -q '^\[General\]' "$QCONF" || printf '\n[General]\n' >> "$QCONF"
-
-# force useSystemFont=false (handles key casing variants)
+# force useSystemFont=false
 if grep -q '^[Uu]se[Ss]ystem[Ff]ont=' "$QCONF"; then
   sed -i 's/^[Uu]se[Ss]ystem[Ff]ont=.*/useSystemFont=false/' "$QCONF"
 else
-  printf 'useSystemFont=false\n' >> "$QCONF"
+  echo "useSystemFont=false" >> "$QCONF"
 fi
 
-# force fontSize=16 (handles key casing variants)
+# force fontSize=16
 if grep -q '^[Ff]ont[Ss]ize=' "$QCONF"; then
   sed -i 's/^[Ff]ont[Ss]ize=.*/fontSize=16/' "$QCONF"
 else
-  printf 'fontSize=16\n' >> "$QCONF"
+  echo "fontSize=16" >> "$QCONF"
 fi
 
-# Don't let a missing fontFamily= trip set -e
-family="$(grep -m1 '^fontFamily=' "$QCONF" | cut -d= -f2 || true)"
-echo "    ✓ QTerminal font size set to 16 (family stays ${family:-unchanged})"
+echo "    ✓ QTerminal font size set to 16 (family stays $(grep -m1 '^fontFamily=' "$QCONF" | cut -d= -f2))"
 
 # --- Xfce Terminal (if present) ---
 if command -v xfconf-query >/dev/null 2>&1; then
