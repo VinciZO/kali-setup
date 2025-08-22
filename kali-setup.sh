@@ -13,7 +13,7 @@ set -euo pipefail
 #   • FIREFOX: installs FoxyProxy + sets Burp proxy 127.0.0.1:8080
 #   • TERMINAL: font size 16 (Xfce + GNOME)
 #   • BURP: dark UI + font size 16
-#   • WALLPAPER: sets your chosen image (Xfce + GNOME)
+#   • WALLPAPER: sets your chosen image (QTerminal + Xfce + GNOME)
 #
 #  HOW TO RUN
 #   chmod +x kali-setup.sh
@@ -103,31 +103,35 @@ done
 # =====================================================
 echo "[*] Setting terminal font size to 16..."
 
-# =====================================================
-#  TERMINAL FONT: QTerminal -> keep FiraCode, set 16pt
-# =====================================================
-echo "[*] Setting QTerminal font size to 16..."
+# --- QTerminal (if present) ---
+# Pick the correct config file: prefer .conf, fall back to .ini
+QCONF="$HOME/.config/qterminal.org/qterminal.conf"
+[[ -f "$QCONF" ]] || QCONF="$HOME/.config/qterminal.org/qterminal.ini"
 
-QCONF="$HOME/.config/qterminal.org/qterminal.ini"
 pkill -x qterminal 2>/dev/null || true      # close QTerminal so it can't overwrite changes
 mkdir -p "$(dirname "$QCONF")"
 [[ -f "$QCONF" ]] || printf "[General]\n" > "$QCONF"
 
-# force useSystemFont=false
+# Ensure we have a [General] section (some files exist without it)
+grep -q '^\[General\]' "$QCONF" || printf '\n[General]\n' >> "$QCONF"
+
+# force useSystemFont=false (handles key casing variants)
 if grep -q '^[Uu]se[Ss]ystem[Ff]ont=' "$QCONF"; then
   sed -i 's/^[Uu]se[Ss]ystem[Ff]ont=.*/useSystemFont=false/' "$QCONF"
 else
-  echo "useSystemFont=false" >> "$QCONF"
+  printf 'useSystemFont=false\n' >> "$QCONF"
 fi
 
-# force fontSize=16
+# force fontSize=16 (handles key casing variants)
 if grep -q '^[Ff]ont[Ss]ize=' "$QCONF"; then
   sed -i 's/^[Ff]ont[Ss]ize=.*/fontSize=16/' "$QCONF"
 else
-  echo "fontSize=16" >> "$QCONF"
+  printf 'fontSize=16\n' >> "$QCONF"
 fi
 
-echo "    ✓ QTerminal font size set to 16 (family stays $(grep -m1 '^fontFamily=' "$QCONF" | cut -d= -f2))"
+# Don't let a missing fontFamily= trip set -e
+family="$(grep -m1 '^fontFamily=' "$QCONF" | cut -d= -f2 || true)"
+echo "    ✓ QTerminal font size set to 16 (family stays ${family:-unchanged})"
 
 # --- Xfce Terminal (if present) ---
 if command -v xfconf-query >/dev/null 2>&1; then
@@ -137,10 +141,12 @@ fi
 
 # --- GNOME Terminal (if present) ---
 if command -v gsettings >/dev/null 2>&1 && gsettings list-schemas | grep -q 'org.gnome.Terminal.ProfilesList'; then
-  PROFILE_ID=$(gsettings get org.gnome.Terminal.ProfilesList default | tr -d \')
-  BASE="org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:$PROFILE_ID/"
-  gsettings set "$BASE" use-system-font false || true
-  gsettings set "$BASE" font "Monospace 16" || true
+  PROFILE_ID="$(gsettings get org.gnome.Terminal.ProfilesList default | tr -d \')"
+  if [[ -n "$PROFILE_ID" ]]; then
+    BASE="org.gnome.Terminal.Legacy.Profile:/org/gnome/terminal/legacy/profiles:/:$PROFILE_ID/"
+    gsettings set "$BASE" use-system-font false || true
+    gsettings set "$BASE" font "Monospace 16" || true
+  fi
 fi
 
 # =====================================================
