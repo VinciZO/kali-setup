@@ -103,44 +103,31 @@ done
 # =====================================================
 echo "[*] Setting terminal font size to 16..."
 
-# --- QTerminal (LXQt) ---
-if ps -o comm= -p $PPID | grep -qi 'qterminal'; then
-  QINI="$HOME/.config/qterminal.org/qterminal.ini"
-  mkdir -p "$(dirname "$QINI")"
+# =====================================================
+#  TERMINAL FONT: QTerminal -> keep FiraCode, set 16pt
+# =====================================================
+echo "[*] Setting QTerminal font size to 16..."
 
-  if [[ ! -f "$QINI" ]]; then
-    # Create a minimal config with our font settings
-    cat > "$QINI" <<'EOF'
-[General]
-fontFamily=Monospace
-fontSize=16
-EOF
-  else
-    # Update (or add) fontFamily/fontSize inside [General] section in-place
-    awk -v fam="Monospace" -v size="16" '
-      BEGIN{in_gen=0; found_gen=0; setfam=0; setsize=0}
-      /^\[General\]/{print; in_gen=1; found_gen=1; next}
-      /^\[/{ if(in_gen && !setfam){print "fontFamily=" fam}
-             if(in_gen && !setsize){print "fontSize=" size}
-             in_gen=0; print; next }
-      {
-        if(in_gen && $0 ~ /^fontFamily=/){print "fontFamily=" fam; setfam=1; next}
-        if(in_gen && $0 ~ /^fontSize=/){print "fontSize=" size; setsize=1; next}
-        print
-      }
-      END{
-        if(!found_gen){
-          print "[General]"
-          print "fontFamily=" fam
-          print "fontSize=" size
-        } else if(in_gen){
-          if(!setfam) print "fontFamily=" fam
-          if(!setsize) print "fontSize=" size
-        }
-      }' "$QINI" > "$QINI.tmp" && mv "$QINI.tmp" "$QINI"
-  fi
-  echo "    -> QTerminal font set to Monospace 16 (restart QTerminal to apply)."
+QCONF="$HOME/.config/qterminal.org/qterminal.ini"
+pkill -x qterminal 2>/dev/null || true      # close QTerminal so it can't overwrite changes
+mkdir -p "$(dirname "$QCONF")"
+[[ -f "$QCONF" ]] || printf "[General]\n" > "$QCONF"
+
+# force useSystemFont=false
+if grep -q '^[Uu]se[Ss]ystem[Ff]ont=' "$QCONF"; then
+  sed -i 's/^[Uu]se[Ss]ystem[Ff]ont=.*/useSystemFont=false/' "$QCONF"
+else
+  echo "useSystemFont=false" >> "$QCONF"
 fi
+
+# force fontSize=16
+if grep -q '^[Ff]ont[Ss]ize=' "$QCONF"; then
+  sed -i 's/^[Ff]ont[Ss]ize=.*/fontSize=16/' "$QCONF"
+else
+  echo "fontSize=16" >> "$QCONF"
+fi
+
+echo "    ✓ QTerminal font size set to 16 (family stays $(grep -m1 '^fontFamily=' "$QCONF" | cut -d= -f2))"
 
 # --- Xfce Terminal (if present) ---
 if command -v xfconf-query >/dev/null 2>&1; then
