@@ -7,9 +7,7 @@ set -euo pipefail
 #  WHAT THIS DOES
 #   • apt update/upgrade, then installs base packages
 #   • TIME: sets timezone to Europe/Berlin + enables NTP
-#   • FIREFOX: installs FoxyProxy + Wappalyzer; sets Burp proxy 127.0.0.1:8080
 #   • TERMINAL: font size 16 (QTerminal + Xfce + GNOME)
-#   • BURP: dark UI + font size 16
 #   • WALLPAPER: sets your chosen image (QTerminal + Xfce + GNOME)
 # =====================================================
 
@@ -113,6 +111,88 @@ elif [[ -f "$ROCKYOU_DIR/rockyou.txt.gz" ]]; then
 else
   echo "    !! Neither rockyou.txt nor rockyou.txt.gz found in $ROCKYOU_DIR"
 fi
+
+# ===== Tools: create ~/www and pull helpers ==================================
+echo "[*] Preparing ~/www with common tools..."
+# ===== Tools: ~/www + local-copy-or-download =================================
+echo "[*] Preparing ~/www with common tools (prefer local copies)..."
+WWW_DIR="$HOME/www"
+mkdir -p "$WWW_DIR"
+
+need() { command -v "$1" >/dev/null 2>&1 || { echo "    -> installing $1..."; sudo apt install -y "$1"; }; }
+UA="Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0"
+curlget() { curl -fL --retry 3 --retry-delay 2 -A "$UA" "$@"; }
+
+# Helper: try to copy first match from /usr/share, else curl it
+copy_or_get() {
+  local pattern="$1" dest="$2" url="$3"
+  local found
+  found="$(sudo find /usr/share -maxdepth 8 -type f -iname "$pattern" 2>/dev/null | head -n1 || true)"
+  if [[ -n "$found" ]]; then
+    echo "  - Found local: $found -> $dest"
+    sudo cp -f "$found" "$dest"
+  else
+    echo "  - Downloading -> $dest"
+    curlget -o "$dest" "$url"
+  fi
+}
+
+# --- Sysinternals Suite (Windows binaries, ZIP) ---
+if [[ ! -d "$WWW_DIR/sysinternals" ]]; then
+  echo "  - Downloading Sysinternals Suite..."
+  need unzip
+  TMPZ="/tmp/sysinternals.zip"
+  curlget -o "$TMPZ" "https://download.sysinternals.com/files/SysinternalsSuite.zip"
+  mkdir -p "$WWW_DIR/sysinternals"
+  unzip -oq "$TMPZ" -d "$WWW_DIR/sysinternals"
+  rm -f "$TMPZ"
+else
+  echo "  ✓ Sysinternals already present"
+fi
+
+# --- linpeas.sh ---
+copy_or_get "linpeas.sh" "$WWW_DIR/linpeas.sh" \
+  "https://github.com/carlospolop/PEASS-ng/releases/latest/download/linpeas.sh"
+chmod +x "$WWW_DIR/linpeas.sh" || true
+
+# --- LinEnum.sh ---
+copy_or_get "LinEnum.sh" "$WWW_DIR/LinEnum.sh" \
+  "https://raw.githubusercontent.com/rebootuser/LinEnum/master/LinEnum.sh"
+chmod +x "$WWW_DIR/LinEnum.sh" || true
+
+# --- mimikatz.exe ---
+copy_or_get "mimikatz.exe" "$WWW_DIR/mimikatz.exe" \
+  "https://github.com/gentilkiwi/mimikatz/releases/latest/download/mimikatz_trunk.zip"
+if file "$WWW_DIR/mimikatz.exe" 2>/dev/null | grep -qi zip; then
+  need unzip
+  TMPZ="$WWW_DIR/mimikatz_trunk.zip"
+  mv -f "$WWW_DIR/mimikatz.exe" "$TMPZ"
+  unzip -oq "$TMPZ" -d "$WWW_DIR/mimikatz_extracted"
+  CAND="$(find "$WWW_DIR/mimikatz_extracted" -iname mimikatz.exe | sort | head -n1 || true)"
+  if [[ -n "$CAND" ]]; then mv -f "$CAND" "$WWW_DIR/mimikatz.exe"; fi
+  rm -rf "$WWW_DIR/mimikatz_extracted" "$TMPZ"
+fi
+
+# --- SharpHound.ps1 ---
+copy_or_get "SharpHound.ps1" "$WWW_DIR/SharpHound.ps1" \
+  "https://raw.githubusercontent.com/BloodHoundAD/BloodHound/master/Collectors/SharpHound.ps1"
+
+# --- WinPEASx64.exe ---
+copy_or_get "winpeasx64.exe" "$WWW_DIR/WinPEASx64.exe" \
+  "https://github.com/carlospolop/PEASS-ng/releases/latest/download/winPEASx64.exe"
+
+# --- PowerUp.ps1 ---
+copy_or_get "PowerUp.ps1" "$WWW_DIR/PowerUp.ps1" \
+  "https://raw.githubusercontent.com/PowerShellMafia/PowerSploit/master/Privesc/PowerUp.ps1"
+
+# --- PowerView.ps1 ---
+copy_or_get "PowerView.ps1" "$WWW_DIR/PowerView.ps1" \
+  "https://raw.githubusercontent.com/PowerShellMafia/PowerSploit/master/Recon/PowerView.ps1"
+
+# Final touches
+chmod +x "$WWW_DIR/"*.sh 2>/dev/null || true
+echo "✅ Tools staged in $WWW_DIR"
+
 # ===== DONE ================================================================
 echo
 echo "✅ kali-setup finished."
