@@ -353,6 +353,44 @@ if [[ ! -f "$WWW_DIR/powercat.ps1" ]]; then
   [[ -f "$WWW_DIR/powercat.ps1" ]] && echo "    ✓ powercat.ps1 ready" || echo "    !! Failed to get powercat.ps1"
 fi
 
+# --- JAWS-enum.ps1 (Windows enum script) ---
+if [[ ! -f "$WWW_DIR/JAWS-enum.ps1" ]]; then
+  echo "  - JAWS-enum.ps1"
+  # Try local first (if installed by any package)
+  if command -v locate >/dev/null 2>&1; then
+    found="$(locate -i '/jaws-enum.ps1' 2>/dev/null | head -n1 || true)"
+  fi
+  [[ -z "${found:-}" ]] && found="$(sudo find /usr -type f -iname 'jaws-enum.ps1' 2>/dev/null | head -n1 || true)"
+  if [[ -n "${found:-}" && -f "$found" ]]; then
+    echo "    -> Found locally: $found"
+    cp -f "$found" "$WWW_DIR/JAWS-enum.ps1"
+  else
+    copy_or_try_urls "jaws-enum.ps1" "$WWW_DIR/JAWS-enum.ps1" \
+      "https://raw.githubusercontent.com/411Hall/JAWS/master/jaws-enum.ps1" \
+      "https://raw.githubusercontent.com/411Hall/JAWS/main/jaws-enum.ps1"
+  fi
+  [[ -f "$WWW_DIR/JAWS-enum.ps1" ]] && echo "    ✓ JAWS-enum.ps1 ready" || echo "    !! Failed to get JAWS-enum.ps1"
+fi
+
+# --- DomainPasswordSpray.ps1 (by dafthack) ---
+if [[ ! -f "$WWW_DIR/DomainPasswordSpray.ps1" ]]; then
+  echo "  - DomainPasswordSpray.ps1"
+  # Try local first
+  if command -v locate >/dev/null 2>&1; then
+    found="$(locate -i '/DomainPasswordSpray.ps1' 2>/dev/null | head -n1 || true)"
+  fi
+  [[ -z "${found:-}" ]] && found="$(sudo find /usr -type f -iname 'DomainPasswordSpray.ps1' 2>/dev/null | head -n1 || true)"
+  if [[ -n "${found:-}" && -f "$found" ]]; then
+    echo "    -> Found locally: $found"
+    cp -f "$found" "$WWW_DIR/DomainPasswordSpray.ps1"
+  else
+    copy_or_try_urls "DomainPasswordSpray.ps1" "$WWW_DIR/DomainPasswordSpray.ps1" \
+      "https://raw.githubusercontent.com/dafthack/DomainPasswordSpray/master/DomainPasswordSpray.ps1"
+  fi
+  [[ -f "$WWW_DIR/DomainPasswordSpray.ps1" ]] && echo "    ✓ DomainPasswordSpray.ps1 ready" || echo "    !! Failed to get DomainPasswordSpray.ps1"
+fi
+
+
 # --- Add reverse-shell generator to ~/www ---
 echo "  - Adding revshell-b64.py to $WWW_DIR"
 cat > "$WWW_DIR/revshell-b64.py" <<'PY'
