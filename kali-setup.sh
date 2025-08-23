@@ -26,6 +26,7 @@ APT_PACKAGES=(
   gobuster
   feroxbuster
   mingw-w64
+  golang
 )
 
 TIMEZONE="Europe/Berlin"
@@ -222,60 +223,57 @@ if [[ ! -f "$WWW_DIR/kerbrute_windows_amd64.exe" ]]; then
     "https://github.com/ropnop/kerbrute/releases/latest/download/kerbrute_windows_amd64.exe"
 fi
 
-# ---------- Chisel (linux + windows) ----------
-need gzip
-if [[ ! -f "$WWW_DIR/chisel_linux_amd64" ]]; then
-  if _fetch -o "$WWW_DIR/chisel_linux_amd64.gz" "https://github.com/jpillora/chisel/releases/latest/download/chisel_linux_amd64.gz"; then
-    gunzip -f "$WWW_DIR/chisel_linux_amd64.gz"
-    chmod +x "$WWW_DIR/chisel_linux_amd64" 2>/dev/null || true
-  else
-    echo "    !! Failed chisel_linux_amd64.gz"
-  fi
+# --- Chisel (build from source: linux_amd64 + windows_amd64) ---
+echo "  - Building chisel from source (linux & windows)..."
+need git
+if ! command -v go >/dev/null 2>&1; then
+  echo "    -> installing Go..."
+  sudo apt install -y golang || sudo apt install -y golang-go
 fi
-if [[ ! -f "$WWW_DIR/chisel_windows_amd64.exe" ]]; then
-  if _fetch -o "$WWW_DIR/chisel_windows_amd64.gz" "https://github.com/jpillora/chisel/releases/latest/download/chisel_windows_amd64.gz"; then
-    gunzip -f "$WWW_DIR/chisel_windows_amd64.gz"
-    # gunzip on the windows gz yields chisel.exe
-    [[ -f "$WWW_DIR/chisel.exe" ]] && mv -f "$WWW_DIR/chisel.exe" "$WWW_DIR/chisel_windows_amd64.exe"
-  else
-    echo "    !! Failed chisel_windows_amd64.gz"
-  fi
+# upx is optional (to compress); try both package names
+if ! command -v upx >/dev/null 2>&1; then
+  sudo apt install -y upx || sudo apt install -y upx-ucl || true
 fi
 
-# ---------- Vshadow ----------
-echo "  - Vshadow: not auto-downloaded (Windows SDK/EULA). If you have it, copy vshadow*.exe into $WWW_DIR."
+BUILD_DIR="/tmp/_build_chisel"
+rm -rf "$BUILD_DIR"
+git clone --depth 1 https://github.com/jpillora/chisel.git "$BUILD_DIR"
 
-# ---------- Rubeus (use ZIP; some releases don’t expose .exe directly) ----------
-if copy_or_try_urls "Rubeus.exe" "$WWW_DIR/Rubeus.exe" \
-  "https://github.com/GhostPack/Rubeus/releases/latest/download/Rubeus.exe"; then
-  : # ok
-else
-  need unzip
-  TMPZ="/tmp/Rubeus.zip"
-  if _fetch -o "$TMPZ" "https://github.com/GhostPack/Rubeus/releases/latest/download/Rubeus.zip"; then
-    unzip -oq "$TMPZ" -d "$WWW_DIR/_rubeus"
-    CAND="$(find "$WWW_DIR/_rubeus" -iname Rubeus.exe | head -n1 || true)"
-    [[ -n "$CAND" ]] && mv -f "$CAND" "$WWW_DIR/Rubeus.exe"
-    rm -rf "$WWW_DIR/_rubeus" "$TMPZ"
-  else
-    echo "    !! Failed to get Rubeus"
-  fi
-fi
+pushd "$BUILD_DIR" >/dev/null
 
-# ---------- dnSpy (dnSpyEx portable net472) ----------
-if [[ ! -d "$WWW_DIR/dnspy" ]]; then
-  found_dnspy="$(sudo find /usr/share -maxdepth 8 -type d -iname "dnspy*" 2>/dev/null | head -n1 || true)"
-  if [[ -n "$found_dnspy" ]]; then
-    cp -r "$found_dnspy" "$WWW_DIR/dnspy"
+# Linux amd64
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo -o chisel_linux_amd64
+command -v upx >/dev/null 2>&1 && upx --brute chisel_linux_amd64 || true
+
+# Windows amd64
+CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -a -installsuffix cgo -o chisel_windows_amd64.exe
+command -v upx >/dev/null 2>&1 && upx --brute chisel_windows_amd64.exe || true
+
+popd >/dev/null
+
+mv -f "$BUILD_DIR/chisel_linux_amd64" "$WWW_DIR/chisel_linux_amd64"
+mv -f "$BUILD_DIR/chisel_windows_amd64.exe" "$WWW_DIR/chisel_windows_amd64.exe"
+chmod +x "$WWW_DIR/chisel_linux_amd64" || true
+rm -rf "$BUILD_DIR"
+echo "    ✓ chisel_linux_amd64 and chisel_windows_amd64.exe ready in $WWW_DIR"
+
+# --- Rubeus (try official .exe, then official zip, then compiled-binaries mirror) ---
+if [[ ! -f "$WWW_DIR/Rubeus.exe" ]]; then
+  if _fetch -o "$WWW_DIR/Rubeus.exe" "https://github.com/GhostPack/Rubeus/releases/latest/download/Rubeus.exe"; then
+    :
   else
     need unzip
-    TMPZ="/tmp/dnSpy-net472.zip"
-    if _fetch -o "$TMPZ" "https://github.com/dnSpyEx/dnSpy/releases/latest/download/dnSpy-net472.zip"; then
-      mkdir -p "$WWW_DIR/dnspy"
-      unzip -oq "$TMPZ" -d "$WWW_DIR/dnspy"
-      rm -f "$TMPZ"
-    else
-      echo "    !! Failed dnSpy download"
+    TMPZ="/tmp/Rubeus-latest.zip"
+    if _fetch -o "$TMPZ" "https://github.com/GhostPack/Rubeus/releases/latest/download/Rubeus.zip"; then
+      unzip -oq "$TMPZ" -d "$WWW_DIR/_rubeus"
+      CAND="$(find "$WWW_DIR/_rubeus" -iname Rubeus.exe | head -n1 || true)"
+      [[ -n "$CAND" ]] && mv -f "$CAND" "$WWW_DIR/Rubeus.exe"
+      rm -rf "$WWW_DIR/_rubeus" "$TMPZ"
+    fi
+    # Fallback to compiled binaries mirror
+    if [[ ! -f "$WWW_DIR/Rubeus.exe" ]]; then
+      _fetch -o "$WWW_DIR/Rubeus.exe" "https://github.com/r3motecontrol/Ghostpack-CompiledBinaries/raw/master/Rubeus.exe" || \
+        echo "    !! Rubeus download failed"
     fi
   fi
 fi
