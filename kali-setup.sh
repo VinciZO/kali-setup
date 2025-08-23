@@ -405,6 +405,15 @@ chmod +x "$WWW_DIR/revshell-b64.py"
 # Ensure everything in ~/www is owned by the current user
 chown -R "$USER:$USER" "$WWW_DIR" 2>/dev/null || true
 
+# --- Update locate database so 'locate' works immediately ---
+echo "[*] Updating locate(mlocate/plocate) database..."
+if command -v updatedb >/dev/null 2>&1; then
+  sudo updatedb
+  echo "    ✓ locate database updated"
+else
+  echo "    !! 'updatedb' not found (install 'mlocate' or 'plocate' if needed)"
+fi
+
 # ---------- Summary ----------
 echo
 echo "== ~/www contents =="
