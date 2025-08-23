@@ -27,6 +27,8 @@ APT_PACKAGES=(
   feroxbuster
   mingw-w64
   golang-go
+  sshuttle
+  exploitdb
 )
 
 TIMEZONE="Europe/Berlin"
@@ -115,7 +117,22 @@ else
   echo "    !! Neither rockyou.txt nor rockyou.txt.gz found in $ROCKYOU_DIR"
 fi
 
+
 # ===== Tools: ~/www (local-copy-or-download, resilient) ======================
+
+# Helper: fetch the first asset on a GitHub "latest" page that matches a regex
+gh_latest_asset() { # usage: gh_latest_asset "user/repo" "regex" "outfile"
+  local repo="$1" regex="$2" out="$3" page
+  page="$(mktemp)"
+  if _fetch -o "$page" "https://github.com/$repo/releases/latest"; then
+    # shellcheck disable=SC2126
+    url="$(grep -Eo "https://github.com/$repo/releases/download/[^\"']+/[^\"']+" "$page" | grep -Ei "$regex" | head -n1 || true)"
+    [[ -n "$url" ]] && _fetch -o "$out" "$url"
+  fi
+  rm -f "$page"
+}
+
+
 echo "[*] Preparing ~/www with common tools (prefer local copies)..."
 WWW_DIR="$HOME/www"
 mkdir -p "$WWW_DIR"
@@ -299,6 +316,44 @@ copy_or_try_urls "GodPotato-NET4.exe" "$WWW_DIR/GodPotato-NET4.exe" \
 copy_or_try_urls "GodPotato-NET2.exe" "$WWW_DIR/GodPotato-NET2.exe" \
   "https://github.com/BeichenDream/GodPotato/releases/download/V1.20/GodPotato-NET2.exe"
 
+# --- Ncat (latest portable from Nmap) ---
+if [[ ! -f "$WWW_DIR/ncat.exe" ]]; then
+  echo "  - ncat.exe (latest portable from Nmap)"
+  need unzip
+  idx="$(mktemp)"
+  if _fetch -o "$idx" "https://nmap.org/dist/"; then
+    ZIP_URL="$(grep -Eo 'ncat-portable-[0-9][0-9A-Za-z\.\-]*\.zip' "$idx" | sed 's#^#https://nmap.org/dist/#' | sort -V | tail -n1 || true)"
+    rm -f "$idx"
+    if [[ -n "$ZIP_URL" ]]; then
+      TMPZ="/tmp/ncat-portable.zip"
+      if _fetch -o "$TMPZ" "$ZIP_URL"; then
+        # portable zips usually nest ncat.exe under a folder — extract wherever it is
+        unzip -oj "$TMPZ" "*/ncat.exe" -d "$WWW_DIR" 2>/dev/null || unzip -oj "$TMPZ" "ncat.exe" -d "$WWW_DIR" 2>/dev/null || true
+        rm -f "$TMPZ"
+      fi
+    fi
+  fi
+  [[ -f "$WWW_DIR/ncat.exe" ]] && echo "    ✓ ncat.exe ready" || echo "    !! Failed to get ncat.exe"
+fi
+
+
+# --- powercat.ps1 (PowerShell netcat) ---
+if [[ ! -f "$WWW_DIR/powercat.ps1" ]]; then
+  echo "  - powercat.ps1"
+  if command -v locate >/dev/null 2>&1; then
+    found="$(locate -i '/powercat.ps1' 2>/dev/null | head -n1 || true)"
+  else
+    found=""
+  fi
+  if [[ -n "$found" && -f "$found" ]]; then
+    echo "    -> Found locally: $found"
+    cp -f "$found" "$WWW_DIR/powercat.ps1"
+  else
+    copy_or_try_urls "powercat.ps1" "$WWW_DIR/powercat.ps1" \
+      "https://raw.githubusercontent.com/besimorhino/powercat/master/powercat.ps1"
+  fi
+  [[ -f "$WWW_DIR/powercat.ps1" ]] && echo "    ✓ powercat.ps1 ready" || echo "    !! Failed to get powercat.ps1"
+fi
 
   # --- Add reverse-shell generator to ~/www ---
 echo "  - Adding revshell-b64.py to $WWW_DIR"
