@@ -36,6 +36,7 @@ APT_PACKAGES=(
   golang-go
   sshuttle
   exploitdb
+  bloodhound
 )
 
 TIMEZONE="Europe/Berlin"
