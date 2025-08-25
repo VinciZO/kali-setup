@@ -37,6 +37,7 @@ APT_PACKAGES=(
   sshuttle
   exploitdb
   bloodhound
+  unzip
 )
 
 TIMEZONE="Europe/Berlin"
@@ -303,10 +304,68 @@ if [[ ! -f "$WWW_DIR/Rubeus.exe" ]]; then
   fi
 fi
 
-# ---------- Inveigh ----------
-copy_or_try_urls "Inveigh.ps1" "$WWW_DIR/Inveigh.ps1" \
-  "https://raw.githubusercontent.com/Kevin-Robertson/Inveigh/master/Inveigh.ps1" \
-  "https://raw.githubusercontent.com/Kevin-Robertson/Inveigh/main/Inveigh.ps1"
+# ---------- Inveigh (Windows x64) — fetch BOTH builds via GitHub API ----------
+# net8.0 (NativeAOT preferred, fallback trimmed-single)  -> ~/www/Inveigh.exe
+# net4.6.2 (legacy)                                      -> ~/www/Inveigh-462.exe
+
+get_gh_asset() {  # usage: get_gh_asset "user/repo" "regex" "outfile"
+  local repo="$1" re="$2" out="$3" url
+  url="$(
+    curl -fsSL -A "$UA" "https://api.github.com/repos/$repo/releases/latest" \
+      | jq -r --arg re "$re" '.assets[]?.browser_download_url | select(test($re;"i"))' \
+      | head -n1
+  )"
+  [[ -n "$url" ]] && curl -fL -A "$UA" -o "$out" "$url"
+}
+
+# --- net8.0 (NativeAOT -> trimmed-single) ---
+if [[ ! -f "$WWW_DIR/Inveigh.exe" ]]; then
+  echo "  - Inveigh.exe (net8.0 win-x64)"
+  TMP="/tmp/inveigh-net8.zip"; rm -f "$TMP"
+  get_gh_asset "Kevin-Robertson/Inveigh" 'inveigh-net8\.0-win-x64-nativeaot.*\.zip$' "$TMP" \
+    || get_gh_asset "Kevin-Robertson/Inveigh" 'inveigh-net8\.0-win-x64-trimmed-single.*\.zip$' "$TMP" || true
+  if [[ -s "$TMP" ]]; then
+    TMPD="$(mktemp -d)"
+    unzip -q -j "$TMP" '*Inveigh*.exe' -d "$TMPD" || true
+    SRC="$(ls "$TMPD"/*Inveigh*.exe 2>/dev/null | head -n1 || true)"
+    if [[ -n "$SRC" ]]; then
+      cp -f "$SRC" "$WWW_DIR/Inveigh.exe"
+      echo "    ✓ Inveigh.exe ready"
+    else
+      echo "    !! No EXE found in net8 archive"
+    fi
+    rm -rf "$TMP" "$TMPD"
+  else
+    echo "    !! Failed to download net8.0 asset"
+  fi
+else
+  echo "  ✓ Inveigh.exe already present — skipping"
+fi
+
+# --- .NET Framework 4.6.2 (legacy) ---
+if [[ ! -f "$WWW_DIR/Inveigh-462.exe" ]]; then
+  echo "  - Inveigh-462.exe (net4.6.2 win-x64)"
+  TMP="/tmp/inveigh-net462.zip"; rm -f "$TMP"
+  get_gh_asset "Kevin-Robertson/Inveigh" 'inveigh-net4\.6\.2.*\.zip$' "$TMP" || true
+  if [[ -s "$TMP" ]]; then
+    TMPD="$(mktemp -d)"
+    unzip -q -j "$TMP" '*Inveigh*.exe' -d "$TMPD" || true
+    SRC="$(ls "$TMPD"/*Inveigh*.exe 2>/dev/null | head -n1 || true)"
+    if [[ -n "$SRC" ]]; then
+      cp -f "$SRC" "$WWW_DIR/Inveigh-462.exe"
+      echo "    ✓ Inveigh-462.exe ready"
+    else
+      echo "    !! No EXE found in net4.6.2 archive"
+    fi
+    rm -rf "$TMP" "$TMPD"
+  else
+    echo "    !! Failed to download net4.6.2 asset"
+  fi
+else
+  echo "  ✓ Inveigh-462.exe already present — skipping"
+fi
+
+
 
 # --- PrintSpoofer (x64 only available in release) ---
 copy_or_try_urls "PrintSpoofer64.exe" "$WWW_DIR/PrintSpoofer64.exe" \
