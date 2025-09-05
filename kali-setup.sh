@@ -450,6 +450,13 @@ if [[ ! -f "$WWW_DIR/DomainPasswordSpray.ps1" ]]; then
   [[ -f "$WWW_DIR/DomainPasswordSpray.ps1" ]] && echo "    ✓ DomainPasswordSpray.ps1 ready" || echo "    !! Failed to get DomainPasswordSpray.ps1"
 fi
 
+# ---------- SharpCollection ----------
+if [[ ! -d "$WWW_DIR/SharpCollection" ]]; then
+  echo "  - Cloning SharpCollection into $WWW_DIR/SharpCollection"
+  git clone --depth 1 https://github.com/Flangvik/SharpCollection.git "$WWW_DIR/SharpCollection"
+else
+  echo "  ✓ SharpCollection already present — skipping download"
+fi
 
 # --- Add reverse-shell generator to ~/www ---
 echo "  - Adding revshell-b64.py to $WWW_DIR"
