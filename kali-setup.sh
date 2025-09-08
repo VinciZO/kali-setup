@@ -38,6 +38,8 @@ APT_PACKAGES=(
   exploitdb
   bloodhound
   unzip
+  wl-clipboard
+  xclip
 )
 
 TIMEZONE="Europe/Berlin"
