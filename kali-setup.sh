@@ -367,7 +367,26 @@ else
   echo "  ✓ Inveigh-462.exe already present — skipping"
 fi
 
-
+# --- PowerUpSQL.ps1 (SQL Server privilege escalation toolkit) ---
+if [[ ! -f "$WWW_DIR/PowerUpSQL.ps1" ]]; then
+  echo "  - PowerUpSQL.ps1"
+  # Try local first
+  if command -v locate >/dev/null 2>&1; then
+    found="$(locate -i '/PowerUpSQL.ps1' 2>/dev/null | head -n1 || true)"
+  fi
+  [[ -z "${found:-}" ]] && found="$(sudo find /usr -type f -iname 'PowerUpSQL.ps1' 2>/dev/null | head -n1 || true)"
+  if [[ -n "${found:-}" && -f "$found" ]]; then
+    echo "    -> Found locally: $found"
+    cp -f "$found" "$WWW_DIR/PowerUpSQL.ps1"
+  else
+    # Fallback to GitHub (multiple URL forms for resilience)
+    copy_or_try_urls "PowerUpSQL.ps1" "$WWW_DIR/PowerUpSQL.ps1" \
+      "https://raw.githubusercontent.com/NetSPI/PowerUpSQL/refs/heads/master/PowerUpSQL.ps1" \
+      "https://raw.githubusercontent.com/NetSPI/PowerUpSQL/master/PowerUpSQL.ps1" \
+      "https://raw.githubusercontent.com/NetSPI/PowerUpSQL/HEAD/PowerUpSQL.ps1"
+  fi
+  [[ -f "$WWW_DIR/PowerUpSQL.ps1" ]] && echo "    ✓ PowerUpSQL.ps1 ready" || echo "    !! Failed to get PowerUpSQL.ps1"
+fi
 
 # --- PrintSpoofer (x64 only available in release) ---
 copy_or_try_urls "PrintSpoofer64.exe" "$WWW_DIR/PrintSpoofer64.exe" \
