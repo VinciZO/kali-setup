@@ -1,7 +1,7 @@
 #Get the ADConnect password with the ADSync database info "instance id, keyset id, entropy.
 
 # Step 1: Get the following 3 information from the ADSync database: sqlcmd -Q "use ADsync; select instance_id,keyset_id,entropy from mms_server_configuration"
-# Step 2: Replace the key_id, instance_id, entropy in the script below with the values returned by the above cmd. 
+# Step 2: Replace the key_id, instance_id, entropy in the script below with the values returned by the above cmd. Also change the Server name in line 12 ($client...)  
 # Step 3: Import-Module .\Get-ADConnect-Password    and run:    Get-ADConnectPassword
 
 Function Get-ADConnectPassword{
