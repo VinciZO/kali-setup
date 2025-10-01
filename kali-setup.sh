@@ -40,6 +40,7 @@ APT_PACKAGES=(
   unzip
   wl-clipboard
   xclip
+  netexec
 )
 
 TIMEZONE="Europe/Berlin"
