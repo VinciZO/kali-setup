@@ -655,3 +655,24 @@ echo "Terminal: font set to 16 (QTerminal/Xfce/GNOME)"
 echo "You still have to install Firefox extensions, e.g. FoxyProxy, Wappalyzer"
 echo "⚠️  Reminder: change your local password:  passwd"
 echo
+
+# --- Remove the cloned kali-setup repo directory (safe deletion) ----------
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_NAME="$(basename "$SCRIPT_DIR")"
+
+if [[ "$REPO_NAME" == "kali-setup" && -d "$SCRIPT_DIR/.git" ]]; then
+  # Extra safety: never rm / or $HOME
+  if [[ "$SCRIPT_DIR" == "/" || "$SCRIPT_DIR" == "$HOME" ]]; then
+    echo "    !! Safety check: refusing to delete $SCRIPT_DIR"
+  else
+    echo "[*] Removing cloned repo directory: $SCRIPT_DIR"
+    # change to a safe location before removing to avoid deleting cwd
+    cd "$HOME" || true
+    # use as_root helper (defined earlier in script) to ensure removal if needed
+    as_root "rm -rf -- '$SCRIPT_DIR'"
+    echo "    ✓ Removed $SCRIPT_DIR"
+  fi
+else
+  echo "    -> Skipping removal: current script dir is not a 'kali-setup' git repo ($SCRIPT_DIR)"
+fi
+
