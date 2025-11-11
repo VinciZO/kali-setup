@@ -118,9 +118,9 @@ if command -v gsettings >/dev/null 2>&1 && gsettings list-schemas | grep -q 'org
 fi
 
 # --- Move tmux.conf to home directory ---
-if [[ -f "./tmux.conf" ]]; then
+if [[ -f "./.tmux.conf" ]]; then
   echo "[*] Installing tmux.conf..."
-  mv -f ./tmux.conf "$HOME/.tmux.conf"
+  mv -f ./.tmux.conf "$HOME/.tmux.conf"
   echo "    ✓ Moved tmux.conf to ~/.tmux.conf"
 fi
 
