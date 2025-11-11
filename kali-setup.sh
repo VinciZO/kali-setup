@@ -117,6 +117,21 @@ if command -v gsettings >/dev/null 2>&1 && gsettings list-schemas | grep -q 'org
   fi
 fi
 
+# --- Move tmux.conf to home directory ---
+if [[ -f "./tmux.conf" ]]; then
+  echo "[*] Installing tmux.conf..."
+  mv -f ./tmux.conf "$HOME/.tmux.conf"
+  echo "    ✓ Moved tmux.conf to ~/.tmux.conf"
+fi
+
+# --- Move Get-ADConnect-Password.ps1 to ~/www ---
+if [[ -f "./Get-ADConnect-Password.ps1" ]]; then
+  echo "[*] Moving Get-ADConnect-Password.ps1 to ~/www..."
+  mkdir -p "$HOME/www"
+  mv -f ./Get-ADConnect-Password.ps1 "$HOME/www/Get-ADConnect-Password.ps1"
+  echo "    ✓ Moved to ~/www/Get-ADConnect-Password.ps1"
+fi
+
 # ===== Decompress rockyou.txt.gz ==========================================
 ROCKYOU_DIR="/usr/share/wordlists"
 if [[ -f "$ROCKYOU_DIR/rockyou.txt" ]]; then
