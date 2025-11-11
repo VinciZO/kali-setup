@@ -480,6 +480,125 @@ else
   echo "  ✓ SharpCollection already present — skipping download"
 fi
 
+# --- ADRecon (compact) ---
+if [[ ! -f "$WWW_DIR/ADRecon.ps1" ]]; then
+  echo "  - ADRecon"
+  # 1) try to find a local copy first
+  if command -v locate >/dev/null 2>&1; then
+    found="$(locate -i '/ADRecon.ps1' 2>/dev/null | head -n1 || true)"
+  fi
+  found="${found:-$(sudo find /usr /opt /home -type f -iname 'ADRecon.ps1' 2>/dev/null | head -n1 || true)}"
+  if [[ -n "$found" && -f "$found" ]]; then
+    echo "    -> copying local: $found"
+    sudo cp -f "$found" "$WWW_DIR/ADRecon.ps1"
+  else
+    # 2) try raw file from the repository (fast)
+    RAW_URL="https://raw.githubusercontent.com/adrecon/ADRecon/master/ADRecon.ps1"
+    if _fetch -o "$WWW_DIR/ADRecon.ps1" "$RAW_URL"; then
+      echo "    ✓ downloaded ADRecon.ps1 from repo (master)"
+    else
+      rm -f "$WWW_DIR/ADRecon.ps1" 2>/dev/null || true
+      # 3) fallback: try GitHub archive (master zip) and extract the .ps1
+      TMPZIP="/tmp/adrecon_master.zip"; TMPD="$(mktemp -d)"
+      if _fetch -o "$TMPZIP" "https://github.com/adrecon/ADRecon/archive/refs/heads/master.zip"; then
+        unzip -q -j "$TMPZIP" "ADRecon-master/ADRecon.ps1" -d "$TMPD" 2>/dev/null || true
+        if [[ -f "$TMPD/ADRecon.ps1" ]]; then
+          mv -f "$TMPD/ADRecon.ps1" "$WWW_DIR/ADRecon.ps1"
+          echo "    ✓ extracted ADRecon.ps1 from archive"
+        else
+          echo "    !! ADRecon.ps1 not found inside archive"
+        fi
+      else
+        echo "    !! Failed to download ADRecon from raw repo or archive"
+      fi
+      rm -f "$TMPZIP"; rm -rf "$TMPD" || true
+    fi
+  fi
+
+  # finalize if present
+  if [[ -f "$WWW_DIR/ADRecon.ps1" ]]; then
+    chmod +x "$WWW_DIR/ADRecon.ps1" 2>/dev/null || true
+    chown "$USER:$USER" "$WWW_DIR/ADRecon.ps1" 2>/dev/null || true
+    echo "    -> saved: $WWW_DIR/ADRecon.ps1 ($(stat -c%s "$WWW_DIR/ADRecon.ps1") bytes)"
+  else
+    echo "    !! ADRecon fetch failed — try manually: https://github.com/adrecon/ADRecon"
+  fi
+else
+  echo "  ✓ ADRecon.ps1 already present — skipping"
+fi
+
+# --- Group3r (compact) ---
+if [[ ! -f "$WWW_DIR/Group3r.exe" ]]; then
+  echo "  - Group3r"
+  # 1) try to find locally first
+  if command -v locate >/dev/null 2>&1; then
+    found="$(locate -i '/Group3r.exe' 2>/dev/null | head -n1 || true)"
+  fi
+  found="${found:-$(sudo find /usr /opt /home -type f -iname 'Group3r.exe' 2>/dev/null | head -n1 || true)}"
+  if [[ -n "$found" && -f "$found" ]]; then
+    echo "    -> copying local: $found"
+    sudo cp -f "$found" "$WWW_DIR/Group3r.exe"
+  else
+    # 2) try GitHub direct latest release link
+    if _fetch -o "$WWW_DIR/Group3r.exe" "https://github.com/Group3r/Group3r/releases/latest/download/Group3r.exe"; then
+      echo "    ✓ downloaded from releases/latest"
+    else
+      rm -f "$WWW_DIR/Group3r.exe" 2>/dev/null || true
+      # 3) fallback via GitHub API helper
+      TMP="/tmp/group3r_asset.exe"; rm -f "$TMP"
+      get_gh_asset "Group3r/Group3r" 'Group3r.*\.exe$' "$TMP" || true
+      if [[ -s "$TMP" ]]; then mv -f "$TMP" "$WWW_DIR/Group3r.exe"; else
+        echo "    !! Group3r fetch failed (check https://github.com/Group3r/Group3r/releases)"
+      fi
+    fi
+  fi
+
+  # finalise
+  if [[ -f "$WWW_DIR/Group3r.exe" ]]; then
+    chmod +x "$WWW_DIR/Group3r.exe" 2>/dev/null || true
+    chown "$USER:$USER" "$WWW_DIR/Group3r.exe" 2>/dev/null || true
+    echo "    -> saved: $WWW_DIR/Group3r.exe ($(stat -c%s "$WWW_DIR/Group3r.exe") bytes)"
+  fi
+else
+  echo "  ✓ Group3r.exe already present — skipping"
+fi
+
+# --- Snaffler (compact) ---
+if [[ ! -f "$WWW_DIR/Snaffler.exe" ]]; then
+  echo "  - Snaffler"
+  # 1) local copy (fast -> reliable)
+  if command -v locate >/dev/null 2>&1; then
+    found="$(locate -i '/Snaffler.exe' 2>/dev/null | head -n1 || true)"
+  fi
+  found="${found:-$(sudo find /usr /opt /home -type f -iname 'Snaffler.exe' 2>/dev/null | head -n1 || true)}"
+  if [[ -n "$found" && -f "$found" ]]; then
+    echo "    -> copying local: $found"
+    sudo cp -f "$found" "$WWW_DIR/Snaffler.exe"
+  else
+    # 2) try direct latest download
+    if _fetch -o "$WWW_DIR/Snaffler.exe" "https://github.com/SnaffCon/Snaffler/releases/latest/download/Snaffler.exe"; then
+      echo "    ✓ downloaded from releases/latest"
+    else
+      rm -f "$WWW_DIR/Snaffler.exe" 2>/dev/null || true
+      # 3) fallback via GitHub API helper (get_gh_asset)
+      TMP="/tmp/snaffler_asset.exe"; rm -f "$TMP"
+      get_gh_asset "SnaffCon/Snaffler" 'Snaffler.*\.exe$' "$TMP" || true
+      if [[ -s "$TMP" ]]; then mv -f "$TMP" "$WWW_DIR/Snaffler.exe"; else
+        echo "    !! Snaffler fetch failed (try manually from https://github.com/SnaffCon/Snaffler/releases)"
+      fi
+    fi
+  fi
+
+  # finalise if present
+  if [[ -f "$WWW_DIR/Snaffler.exe" ]]; then
+    chmod +x "$WWW_DIR/Snaffler.exe" 2>/dev/null || true
+    chown "$USER:$USER" "$WWW_DIR/Snaffler.exe" 2>/dev/null || true
+    echo "    -> saved: $WWW_DIR/Snaffler.exe ($(stat -c%s "$WWW_DIR/Snaffler.exe") bytes)"
+  fi
+else
+  echo "  ✓ Snaffler.exe already present — skipping"
+fi
+
 # --- Add reverse-shell generator to ~/www ---
 echo "  - Adding revshell-b64.py to $WWW_DIR"
 cat > "$WWW_DIR/revshell-b64.py" <<'PY'
