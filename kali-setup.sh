@@ -285,11 +285,11 @@ else
   pushd "$BUILD_DIR" >/dev/null
 
   # Linux amd64
-  CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo -o chisel_linux_amd64
+  GOPATH=/tmp/_go_chisel CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -installsuffix cgo -o chisel_linux_amd64
   command -v upx >/dev/null 2>&1 && upx --brute chisel_linux_amd64 || true
 
   # Windows amd64
-  CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -a -installsuffix cgo -o chisel_windows_amd64.exe
+  GOPATH=/tmp/_go_chisel CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -a -installsuffix cgo -o chisel_windows_amd64.exe
   command -v upx >/dev/null 2>&1 && upx --brute chisel_windows_amd64.exe || true
 
   popd >/dev/null
@@ -298,6 +298,7 @@ else
   mv -f "$BUILD_DIR/chisel_windows_amd64.exe" "$WWW_DIR/chisel_windows_amd64.exe"
   chmod +x "$WWW_DIR/chisel_linux_amd64" || true
   rm -rf "$BUILD_DIR"
+  rm -rf /tmp/_go_chisel
   echo "    ✓ chisel_linux_amd64 and chisel_windows_amd64.exe ready in $WWW_DIR"
 fi
 
